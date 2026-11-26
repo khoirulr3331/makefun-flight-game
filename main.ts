@@ -3,6 +3,8 @@
 // directory (MAKEFUN_OUTPUT_DIR when set, otherwise /output) and writes
 // /output/dossier.json with buildDossier from vendor/makefun-game.ts,
 // using the same caps the kit starter uses.
+// Runs in the grader as an unprivileged user on a read-only filesystem:
+// it must only write inside the output directory, never beside itself.
 
 import { buildDossier } from './vendor/makefun-game.ts';
 import {
@@ -46,8 +48,13 @@ function main(): void {
     throw new Error('main.ts: no screenshots/ directory beside main.ts');
   }
   // A clean output directory, so a second run writes the same bytes.
-  if (existsSync(outDir)) rmSync(outDir, { recursive: true, force: true });
+  // Clear only the contents, never the directory itself: the grader
+  // mounts the output directory writable but its parent read-only,
+  // so removing the directory itself (rmdir) fails with EACCES.
   mkdirSync(outDir, { recursive: true });
+  for (const entry of readdirSync(outDir)) {
+    rmSync(join(outDir, entry), { recursive: true, force: true });
+  }
   copyTree(gameDir, join(outDir, 'game'));
   copyTree(shotsDir, join(outDir, 'screenshots'));
   const dossier = buildDossier(outDir, CAPS);

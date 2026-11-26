@@ -81,6 +81,9 @@ export function stepFlight(state, input, wind, dt) {
   if (state.pitch > 0) targetSpeed -= state.pitch * 22;
   if (state.pitch < 0) targetSpeed -= state.pitch * 14; // dive gains speed
   targetSpeed = Math.max(P.minSpeed, Math.min(P.maxSpeed + 8, targetSpeed));
+  // Parked or taxiing with the throttle closed, the plane rolls to a stop:
+  // without this the minSpeed floor alone drags it along at 12 m/s idle.
+  if (state.onGround && state.throttle <= 0) targetSpeed = 0;
   if (input.brake) targetSpeed = Math.min(targetSpeed, state.speed - P.brakeDecel * dt);
   const accel = input.brake ? P.brakeDecel * 2.2 : P.accel;
   const diff = targetSpeed - state.speed;
