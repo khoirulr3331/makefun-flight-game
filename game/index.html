@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cakrawala Courier — island-hopping flight game</title>
+<link rel="icon" href="data:,">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #1a2a3a; }
+  body { font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: #fff; }
+  #game { position: fixed; inset: 0; }
+  #game canvas { display: block; }
+
+  /* ---------- HUD: dark translucent panels, warm amber text ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; display: none; }
+  .panel {
+    position: absolute; background: rgba(12, 18, 26, 0.62);
+    border: 1px solid rgba(255, 201, 60, 0.35); border-radius: 8px;
+    padding: 8px 12px; color: #ffe9b0; backdrop-filter: blur(2px);
+  }
+  .panel .label { font-size: 11px; letter-spacing: 2px; color: #ffb84d; opacity: 0.9; }
+  .panel .big { font-size: 26px; font-weight: 700; color: #fff; line-height: 1.1; }
+  .panel .sub { font-size: 13px; color: #ffe9b0; }
+
+  #alt-panel { top: 14px; left: 14px; width: 210px; display: flex; gap: 12px; align-items: center; }
+  #attitude {
+    width: 64px; height: 64px; border-radius: 50%; overflow: hidden; flex: none;
+    border: 2px solid rgba(255, 201, 60, 0.6); background: #7fb2e0; position: relative;
+  }
+  #att-horizon { position: absolute; left: -25%; top: -25%; width: 150%; height: 150%; }
+  #att-horizon .sky-half { position: absolute; left: 0; top: 0; width: 100%; height: 50%; background: #7fb2e0; }
+  #att-horizon .ground-half { position: absolute; left: 0; top: 50%; width: 100%; height: 50%; background: #8a5a3a; }
+  #att-horizon .horizon-line { position: absolute; left: 0; top: 50%; width: 100%; height: 2px; background: #fff; margin-top: -1px; }
+  #attitude::after {
+    content: ""; position: absolute; left: 50%; top: 50%; width: 26px; height: 3px;
+    background: #ffc93c; transform: translate(-50%, -50%); border-radius: 2px;
+  }
+  #alt-readout { flex: 1; }
+
+  #heading-panel { top: 14px; left: 50%; transform: translateX(-50%); width: 340px; text-align: center; }
+  #heading-tape-wrap { overflow: hidden; height: 26px; position: relative; }
+  #heading-tape-wrap::after {
+    content: ""; position: absolute; left: 50%; top: 0; width: 2px; height: 100%;
+    background: #ffc93c; transform: translateX(-50%);
+  }
+  #heading-tape-inner { position: absolute; top: 0; height: 26px; white-space: nowrap; }
+  .tape-tick {
+    position: absolute; top: 0; width: 40px; margin-left: -20px; text-align: center;
+    font-size: 13px; color: #ffe9b0;
+  }
+  .tape-tick.cardinal { font-size: 16px; font-weight: 700; color: #ffc93c; }
+  .tape-tick.minor { color: rgba(255, 233, 176, 0.35); }
+  #heading-value { font-size: 22px; font-weight: 700; color: #fff; }
+  #dest-bearing { font-size: 13px; color: #7fd4ff; }
+
+  #speed-panel { top: 14px; right: 14px; width: 210px; display: flex; gap: 12px; }
+  #speed-tape-wrap { width: 52px; height: 140px; overflow: hidden; position: relative; flex: none; }
+  #speed-tape-wrap::after {
+    content: ""; position: absolute; left: 0; top: 50%; width: 100%; height: 2px;
+    background: #ffc93c; transform: translateY(-50%);
+  }
+  #speed-tape-inner { position: absolute; left: 0; width: 100%; }
+  .tape-tick-v {
+    position: absolute; left: 0; width: 100%; height: 18px; margin-top: -9px;
+    text-align: center; font-size: 12px; color: #ffe9b0;
+  }
+  .tape-tick-v.minor { color: rgba(255, 233, 176, 0.3); }
+  #speed-readout { flex: 1; }
+  .gauge { margin-top: 6px; }
+  .gauge .bar { height: 10px; background: rgba(255,255,255,0.15); border-radius: 5px; overflow: hidden; }
+  .gauge .bar > div { height: 100%; border-radius: 5px; background: #ffc93c; }
+  #fuel-fill.fuel-amber { background: #ff9a2a; }
+  #fuel-fill.fuel-low { background: #ff4d2a; }
+  #throttle-fill { background: #7fd4ff; }
+  .gauge-row { display: flex; justify-content: space-between; font-size: 12px; margin-top: 2px; }
+  #wind-value { font-size: 12px; color: #7fd4ff; margin-top: 6px; }
+
+  #objective-panel { left: 14px; bottom: 14px; max-width: 420px; }
+  #sortie-name { font-size: 12px; letter-spacing: 2px; color: #ffb84d; }
+  #objective { font-size: 18px; font-weight: 600; color: #fff; margin-top: 2px; }
+  #ring-counter { font-size: 13px; color: #ffe9b0; margin-top: 2px; }
+
+  #score-panel { right: 14px; bottom: 14px; text-align: right; min-width: 170px; }
+  #score-value { font-size: 30px; font-weight: 700; color: #fff; }
+  #combo { font-size: 15px; font-weight: 700; color: #ffc93c; display: none; }
+  #clock { font-size: 20px; font-weight: 700; color: #fff; }
+  #clock.clock-low { color: #ff4d2a; }
+
+  #warnings {
+    position: absolute; top: 96px; left: 50%; transform: translateX(-50%);
+    font-size: 26px; font-weight: 800; letter-spacing: 3px; display: none;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+  }
+  #warnings.warn-amber { color: #ffb84d; }
+  #warnings.warn-red { color: #ff4d2a; }
+
+  #fp-marker {
+    position: absolute; left: 50%; top: 50%; width: 14px; height: 14px;
+    transform: translate(-50%, -50%); border: 2px solid rgba(255, 201, 60, 0.85);
+    border-radius: 50%;
+  }
+  #fp-marker::after {
+    content: ""; position: absolute; left: 50%; top: -9px; width: 2px; height: 6px;
+    background: rgba(255, 201, 60, 0.85); transform: translateX(-50%);
+  }
+  #ring-arrow {
+    position: absolute; width: 0; height: 0; display: none; z-index: 6;
+    border-top: 14px solid transparent; border-bottom: 14px solid transparent;
+    border-left: 26px solid #ffc93c; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
+  }
+  #hint {
+    position: absolute; bottom: 92px; left: 50%; transform: translateX(-50%);
+    background: rgba(12, 18, 26, 0.7); border-radius: 6px; padding: 8px 16px;
+    font-size: 15px; color: #ffe9b0; display: none; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div id="game"></div>
+
+<!-- ======================= HUD ======================= -->
+<div id="hud">
+  <div id="alt-panel" class="panel">
+    <div id="attitude"><div id="att-horizon">
+      <div class="sky-half"></div><div class="ground-half"></div><div class="horizon-line"></div>
+    </div></div>
+    <div id="alt-readout">
+      <div class="label">ALTITUDE</div>
+      <div class="big" id="alt-value">0 ft</div>
+      <div class="sub"><span id="alt-m">0 m</span> · <span id="vs-arrow">—</span> <span id="vs-value">+0.0 m/s</span></div>
+    </div>
+  </div>
+
+  <div id="heading-panel" class="panel">
+    <div id="heading-tape-wrap"><div id="heading-tape-inner"></div></div>
+    <div><span id="heading-value">090°</span> · <span id="dest-bearing">▲ 090°</span></div>
+  </div>
+
+  <div id="speed-panel" class="panel">
+    <div id="speed-tape-wrap"><div id="speed-tape-inner"></div></div>
+    <div id="speed-readout">
+      <div class="label">AIRSPEED</div>
+      <div class="big" id="speed-value">0 kt</div>
+      <div class="gauge"><div class="label">THROTTLE <span id="throttle-value">0%</span></div>
+        <div class="bar"><div id="throttle-fill" style="width:0%"></div></div></div>
+      <div class="gauge"><div class="label">FUEL <span id="fuel-value">100%</span></div>
+        <div class="bar"><div id="fuel-fill" class="fuel-ok" style="width:100%"></div></div></div>
+      <div id="wind-value">WIND 4 kt 315°</div>
+    </div>
+  </div>
+
+  <div id="objective-panel" class="panel">
+    <div id="sortie-name">RING RUN</div>
+    <div id="objective">Ring 1 of 8 — Pulau Merak</div>
+    <div id="ring-counter">RINGS 0/8</div>
+  </div>
+
+  <div id="score-panel" class="panel">
+    <div class="label">SCORE</div>
+    <div id="score-value">0</div>
+    <div id="combo">COMBO ×2 · 1.25×</div>
+    <div class="label">TIME</div>
+    <div id="clock">5:00</div>
+  </div>
+
+  <div id="warnings"></div>
+  <div id="fp-marker"></div>
+  <div id="ring-arrow"></div>
+  <div id="hint"></div>
+</div>
+
+<!-- ======================= SCREENS ======================= -->
+<div id="title-screen" class="screen">
+  <div class="screen-inner">
+    <h1>CAKRAWALA COURIER</h1>
+    <p class="tagline">Island-hopping courier flights over a golden-hour archipelago.
+      Thread the rings, mind your fuel, and bring her home.</p>
+    <div id="sortie-list"></div>
+    <div class="controls">
+      <b>Controls</b> — W/S or ↑/↓ pitch · A/D or ←/→ bank &amp; turn ·
+      Shift throttle up · Ctrl throttle down · Space air brake ·
+      Right-drag glance · Wheel zoom · Enter start · P pause · R restart · M mute
+    </div>
+    <div id="best-score">Best score: 0</div>
+    <div class="screen-prompt">Click a sortie or press Enter to fly</div>
+  </div>
+</div>
+
+<div id="pause-screen" class="screen" style="display:none">
+  <div class="screen-inner narrow">
+    <h1>PAUSED</h1>
+    <p class="tagline">The courier waits on the wind.</p>
+    <div class="controls">
+      W/S or ↑/↓ pitch · A/D or ←/→ bank &amp; turn · Shift throttle up ·
+      Ctrl throttle down · Space air brake · Right-drag glance · Wheel zoom ·
+      Enter resume · R restart · T title · M mute
+    </div>
+    <div class="button-row">
+      <button id="resume-btn">Resume</button>
+      <button id="restart-btn">Restart sortie</button>
+      <button id="title-btn">Title screen</button>
+    </div>
+  </div>
+</div>
+
+<div id="end-screen" class="screen" style="display:none">
+  <div class="screen-inner narrow">
+    <h1 id="end-title">SORTIE COMPLETE</h1>
+    <p class="tagline" id="end-subtitle"></p>
+    <div id="end-breakdown"></div>
+    <div class="screen-prompt" id="end-prompt"></div>
+  </div>
+</div>
+
+<style>
+  .screen {
+    position: fixed; inset: 0; z-index: 10; display: flex;
+    align-items: center; justify-content: center;
+    background: linear-gradient(rgba(10,16,24,0.25), rgba(10,16,24,0.72));
+  }
+  .screen-inner {
+    width: min(680px, 92vw); text-align: center; padding: 28px 30px;
+    background: rgba(12, 18, 26, 0.66); border: 1px solid rgba(255, 201, 60, 0.4);
+    border-radius: 14px; backdrop-filter: blur(3px);
+  }
+  .screen-inner.narrow { width: min(520px, 92vw); }
+  /* The title panel sits below the HUD's heading tape. */
+  #title-screen .screen-inner { margin-top: 76px; }
+  .screen h1 {
+    font-size: 44px; letter-spacing: 4px; color: #ffc93c;
+    text-shadow: 0 3px 12px rgba(0,0,0,0.6); line-height: 1.05;
+  }
+  .screen h1.end-good { color: #7be495; }
+  .screen h1.end-bad { color: #ff6a4d; }
+  .tagline { font-size: 16px; color: #ffe9b0; margin: 10px 0 18px; line-height: 1.45; }
+  #sortie-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+  .sortie-card {
+    text-align: left; padding: 12px 16px; border-radius: 10px; cursor: pointer;
+    background: rgba(255, 255, 255, 0.06); border: 2px solid rgba(255, 201, 60, 0.25);
+  }
+  .sortie-card:hover { background: rgba(255, 201, 60, 0.12); }
+  .sortie-card.selected { border-color: #ffc93c; background: rgba(255, 201, 60, 0.16); }
+  .sortie-name { font-size: 19px; font-weight: 700; color: #fff; letter-spacing: 1px; }
+  .sortie-blurb { font-size: 14px; color: #ffe9b0; margin-top: 3px; line-height: 1.4; }
+  .sortie-dest { font-size: 12px; color: #7fd4ff; margin-top: 3px; }
+  .controls { font-size: 13px; line-height: 1.6; color: #d8e2ea; margin-bottom: 12px; }
+  .controls b { color: #ffc93c; }
+  #best-score { font-size: 15px; font-weight: 700; color: #ffc93c; margin-bottom: 8px; }
+  .screen-prompt { font-size: 14px; color: #fff; opacity: 0.85; }
+  #end-breakdown { text-align: left; margin: 6px 0 16px; }
+  .breakdown-row {
+    display: flex; justify-content: space-between; padding: 7px 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12); font-size: 16px; color: #ffe9b0;
+  }
+  .breakdown-row:last-child { border-bottom: none; }
+  .breakdown-row:last-child .breakdown-value { font-size: 22px; color: #ffc93c; }
+  .breakdown-value { font-weight: 700; color: #fff; }
+  .button-row { display: flex; gap: 10px; justify-content: center; margin-top: 14px; }
+  .button-row button {
+    font: inherit; font-size: 15px; font-weight: 700; color: #1a2a3a;
+    background: #ffc93c; border: none; border-radius: 8px; padding: 10px 18px; cursor: pointer;
+  }
+  .button-row button:hover { background: #ffd76a; }
+</style>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
